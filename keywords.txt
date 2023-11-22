@@ -1,0 +1,13 @@
+# Syntax Colouring Map For libcndn
+
+# Data types (KEYWORD1)
+CNTimeout	KEYWORD1
+
+
+# Methods and Functions (KEYWORD2)
+update	KEYWORD2
+reset	KEYWORD2
+disable	KEYWORD2
+lastms	KEYWORD2
+
+# Constants (LITERAL1)

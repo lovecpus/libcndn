@@ -1,0 +1,23 @@
+{
+  "name": "libcndn",
+  "keywords": "CNTimeout,",
+  "description": "Arduino library of Timeout, Digital buttons, uart parser for CNDN Inc.",
+  "authors":
+  [
+    {
+      "name": "TAE GYOON KIM",
+      "email": "lovecpu@cndn.co.kr",
+      "maintainer": true
+    }
+  ],
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/lovecpus/libcndn.git"
+  },
+  "version": "0.1.0",
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": "libcndn.hpp"
+}
