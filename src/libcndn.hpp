@@ -247,6 +247,35 @@ public:
 	}
 };
 
+class CNLineParser {
+private:
+  String  data;
+  String  cmds;
+public:
+  bool readline(char c, const char _dlim='\n', uint16_t sz=128) {
+    if (c == _dlim) {
+      cmds = data;
+      data.clear();
+      return true;
+    } else if (data.length() < sz) {
+      data.concat(c);
+    }
+    return false;
+  }
+
+  const String& getCommand() { return cmds; }
+
+  void clear() {
+    data.clear();
+  }
+
+  void clearCommand() {
+    cmds.clear();
+  }
+
+  virtual bool process(Stream& strm) = 0;
+};
+
 #define START_POS(X,Y)	int npos = -1; int cpos = (X).indexOf(Y, npos+1); if (cpos == -1) break; npos = cpos;
 #define	GET_ARG(X)	(X).substring(cpos+1)
 #define NEXT_POS(X,Y)		cpos = (X).indexOf(Y, npos + 1); if (cpos == -1) break; npos = cpos;
