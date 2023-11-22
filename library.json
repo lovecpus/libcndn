@@ -19,5 +19,6 @@
   "license": "MIT",
   "frameworks": "*",
   "platforms": "*",
+  "examples": "examples/*/*/*.ino",
   "headers": "libcndn.hpp"
 }
