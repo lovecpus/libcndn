@@ -255,7 +255,7 @@ public:
   bool readline(char c, const char _dlim='\n', uint16_t sz=128) {
     if (c == _dlim) {
       cmds = data;
-      data.clear();
+      clear();
       return true;
     } else if (data.length() < sz) {
       data.concat(c);
@@ -266,11 +266,11 @@ public:
   const String& getCommand() { return cmds; }
 
   void clear() {
-    data.clear();
+    data.remove(0,data.length());
   }
 
   void clearCommand() {
-    cmds.clear();
+    cmds.remove(0,cmds.length());
   }
 
   virtual bool process(Stream& strm) = 0;
