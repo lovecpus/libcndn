@@ -233,13 +233,13 @@ public:
 class NTC {
 private:
 	int 	norminalRegister;
-	int 	bCoefficient;
+	int 	nCoefficient;
 public:
-	NTC(int norm, int coef): norminalRegister(norm), bCoefficient(coef) {}
+	NTC(int norm=10000, int coef=3950): norminalRegister(norm), nCoefficient(coef) {}
 	float temp(int registerValue) {
 		float t = registerValue * 1.0f / norminalRegister;
 		t = log(t);
-		t = t / bCoefficient;
+		t = t / nCoefficient;
 		t += 1.0 / (25 + 273.15);
 		t = 1 / t;
 		t -= 273.15;
