@@ -266,11 +266,13 @@ public:
   const String& getCommand() { return cmds; }
 
   void clear() {
-    data.remove(0,data.length());
+		if (data.length()>0)
+    	data.remove(0,data.length());
   }
 
   void clearCommand() {
-    cmds.remove(0,cmds.length());
+		if (cmds.length()>0)
+    	cmds.remove(0,cmds.length());
   }
 
   virtual bool process(Stream& strm) = 0;
