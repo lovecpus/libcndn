@@ -25,6 +25,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __CNDN_HPP__
 #define __CNDN_HPP__
 
+#define VALDEFINE(str) #str
+#define STRDEFINE(str) VALDEFINE(str)
+
 #include <Arduino.h>
 
 class CNTimeout
