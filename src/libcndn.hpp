@@ -105,15 +105,6 @@ public:
 		return s_instance;
 	}
 
-	static void scanWire(TwoWire& wire, Stream& strm) {
-		for(uint8_t i=1; i < 128; i++) {
-			wire.beginTransmission(i);
-			if (wire.endTransmission() == 0x00) {
-				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
-			}
-		}
-	}
-
 	void update(uint32_t now) {
 		for(int i=0; i < numIOs; i++) {
 			CNPIN& p = pins[i];
@@ -242,12 +233,12 @@ public:
 	}
 };
 
-class NTC {
+class CNNTC {
 private:
 	int 	norminalRegister;
 	int 	nCoefficient;
 public:
-	NTC(int norm=10000, int coef=3950): norminalRegister(norm), nCoefficient(coef) {}
+	CNNTC(int norm=10000, int coef=3950): norminalRegister(norm), nCoefficient(coef) {}
 	float temp(int registerValue) {
 		float t = registerValue * 1.0f / norminalRegister;
 		t = log(t);
@@ -256,6 +247,15 @@ public:
 		t = 1 / t;
 		t -= 273.15;
 		return t;
+	}
+
+	static void scanWire(TwoWire& wire, Stream& strm) {
+		for(uint8_t i=1; i < 128; i++) {
+			wire.beginTransmission(i);
+			if (wire.endTransmission() == 0x00) {
+				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
+			}
+		}
 	}
 };
 
