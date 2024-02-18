@@ -248,15 +248,6 @@ public:
 		t -= 273.15;
 		return t;
 	}
-
-	static void scanWire(TwoWire& wire, Stream& strm) {
-		for(uint8_t i=1; i < 128; i++) {
-			wire.beginTransmission(i);
-			if (wire.endTransmission() == 0x00) {
-				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
-			}
-		}
-	}
 };
 
 class CNLineParser {
@@ -293,5 +284,17 @@ public:
 #define START_POS(X,Y)	int npos = -1; int cpos = (X).indexOf(Y, npos+1); if (cpos == -1) break; npos = cpos;
 #define	GET_ARG(X)	(X).substring(cpos+1)
 #define NEXT_POS(X,Y)		cpos = (X).indexOf(Y, npos + 1); if (cpos == -1) break; npos = cpos;
+
+class CNUtils {
+public:	
+	static void scanWire(TwoWire& wire, Stream& strm) {
+		for(uint8_t i=1; i < 128; i++) {
+			wire.beginTransmission(i);
+			if (wire.endTransmission() == 0x00) {
+				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
+			}
+		}
+	}
+};
 
 #endif
