@@ -297,4 +297,6 @@ public:
 	}
 };
 
+#define	CN_UNUSED(_X)		(void(_X))
+
 #endif
