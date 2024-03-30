@@ -44,16 +44,16 @@ public:
 	}
 private:
 	uint32_t  m_sta = 0;
-	bool      m_bEn = true;  
+	uint32_t	m_bit = 1;
 
 public:
 	CNTimeout& disable() {
-		m_bEn = false;
+		bitClear(m_bit, 0);
 		return *this;
 	}
 
 	bool isTimeout(uint32_t now, int32_t out) {
-		if (m_bEn && ((m_sta + out) <= now)) {
+		if (isEnable() && ((m_sta + out) <= now)) {
 			m_sta = now;
 			return true;
 		}
@@ -61,11 +61,12 @@ public:
 	}
 
 	void reset(uint32_t now) {
-		m_bEn = true;
+		bitSet(m_bit, 0);
 		m_sta = now;
 	}
 
-	bool isEnable() { return m_bEn; }
+	inline bool isEnable() { return bitRead(m_bit,0); }
+	bool toggle(uint8_t bit) { bitToggle(m_bit,bit); return bitRead(m_bit,bit); }
 };
 
 template<uint8_t numIOs>
@@ -233,12 +234,12 @@ public:
 	}
 };
 
-class NTC {
+class CNNTC {
 private:
 	int 	norminalRegister;
 	int 	nCoefficient;
 public:
-	NTC(int norm=10000, int coef=3950): norminalRegister(norm), nCoefficient(coef) {}
+	CNNTC(int norm=10000, int coef=3950): norminalRegister(norm), nCoefficient(coef) {}
 	float temp(int registerValue) {
 		float t = registerValue * 1.0f / norminalRegister;
 		t = log(t);
@@ -284,5 +285,19 @@ public:
 #define START_POS(X,Y)	int npos = -1; int cpos = (X).indexOf(Y, npos+1); if (cpos == -1) break; npos = cpos;
 #define	GET_ARG(X)	(X).substring(cpos+1)
 #define NEXT_POS(X,Y)		cpos = (X).indexOf(Y, npos + 1); if (cpos == -1) break; npos = cpos;
+
+class CNUtils {
+public:	
+	static void scanWire(TwoWire& wire, Stream& strm) {
+		for(uint8_t i=1; i < 128; i++) {
+			wire.beginTransmission(i);
+			if (wire.endTransmission() == 0x00) {
+				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
+			}
+		}
+	}
+};
+
+#define	CN_UNUSED(_X)		(void(_X))
 
 #endif
