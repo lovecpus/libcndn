@@ -44,16 +44,16 @@ public:
 	}
 private:
 	uint32_t  m_sta = 0;
-	bool      m_bEn = true;  
+	uint32_t	m_bit = 1;
 
 public:
 	CNTimeout& disable() {
-		m_bEn = false;
+		bitClear(m_bit, 0);
 		return *this;
 	}
 
 	bool isTimeout(uint32_t now, int32_t out) {
-		if (m_bEn && ((m_sta + out) <= now)) {
+		if (isEnable() && ((m_sta + out) <= now)) {
 			m_sta = now;
 			return true;
 		}
@@ -61,11 +61,12 @@ public:
 	}
 
 	void reset(uint32_t now) {
-		m_bEn = true;
+		bitSet(m_bit, 0);
 		m_sta = now;
 	}
 
-	bool isEnable() { return m_bEn; }
+	inline bool isEnable() { return bitRead(m_bit,0); }
+	bool toggle(uint8_t bit) { bitToggle(m_bit,bit); return bitRead(m_bit,bit); }
 };
 
 template<uint8_t numIOs>
