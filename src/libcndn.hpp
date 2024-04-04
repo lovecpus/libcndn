@@ -289,7 +289,7 @@ public:
 class CNUtils {
 public:	
 	static void scanWire(TwoWire& wire, Stream& strm) {
-		for(uint8_t i=1; i < 128; i++) {
+		for(uint8_t i=1; i < 127; i++) {
 			wire.beginTransmission(i);
 			if (wire.endTransmission() == 0x00) {
 				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
