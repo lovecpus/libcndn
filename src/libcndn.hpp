@@ -298,6 +298,31 @@ public:
 	}
 };
 
+class CNStream : public Stream
+{
+private:
+	uint8_t		*mem;
+	size_t 		tx, rx;
+	size_t 		memsize;
+public:
+	CNStream(size_t _size): memsize(_size), mem(nullptr), tx(0), rx(0) {
+		mem = (uint8_t*)malloc(memsize);
+	}
+
+	~CNStream() {
+		if (mem != nullptr) {
+			free(mem);
+			mem = nullptr;
+		}
+	}
+
+    virtual int available() { return tx-rx; }
+    virtual int read() { return mem[rx++]; rx=rx%memsize; }
+    virtual int peek() { return mem[rx]; }
+	virtual size_t write(uint8_t dat) { mem[tx++]=dat; tx=tx%memsize; return 1; }
+};
+
 #define	CN_UNUSED(_X)		(void(_X))
+#define	CNUNUSED(_X)		((_X)=(_X))
 
 #endif
