@@ -289,7 +289,7 @@ public:
 class CNUtils {
 public:	
 	static void scanWire(TwoWire& wire, Stream& strm) {
-		for(uint8_t i=1; i < 128; i++) {
+		for(uint8_t i=1; i < 127; i++) {
 			wire.beginTransmission(i);
 			if (wire.endTransmission() == 0x00) {
 				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
@@ -298,7 +298,32 @@ public:
 	}
 };
 
+class CNStream : public Stream
+{
+private:
+	uint8_t		*mem;
+	size_t 		tx, rx;
+	size_t 		memsize;
+public:
+	CNStream(size_t _size): memsize(_size), mem(nullptr), tx(0), rx(0) {
+		mem = (uint8_t*)malloc(memsize);
+	}
+
+	~CNStream() {
+		if (mem != nullptr) {
+			free(mem);
+			mem = nullptr;
+		}
+	}
+
+    virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
+    virtual int read() { return mem[rx++]; rx=rx%memsize; }
+    virtual int peek() { return mem[rx]; }
+	virtual size_t write(uint8_t dat) { mem[tx++]=dat; tx=tx%memsize; return 1; }
+};
+
 #define	CN_UNUSED(_X)		(void(_X))
+#define	CNUNUSED(_X)		((_X)=(_X))
 
 struct t3param {
 	double	_DA;
@@ -307,7 +332,8 @@ struct t3param {
 	double	_DD;
 	t3param(double _a,double _b,double _c,double _d):_DA(_a),_DB(_b),_DC(_c),_DD(_d){}
 };
-inline double t3curve(const t3param& v,double x) {
+
+double t3curve(const t3param& v,double x) {
 		double lnx = log(x);
 		double y = 1.0 / (v._DA + v._DB * pow(lnx,1) + v._DC * pow(lnx,2) + v._DD * pow(lnx,3));
 		return y;
