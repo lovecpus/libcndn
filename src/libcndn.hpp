@@ -300,4 +300,17 @@ public:
 
 #define	CN_UNUSED(_X)		(void(_X))
 
+struct t3param {
+	double	_DA;
+	double	_DB;
+	double	_DC;
+	double	_DD;
+	t3param(double _a,double _b,double _c,double _d):_DA(_a),_DB(_b),_DC(_c),_DD(_d){}
+};
+inline double t3curve(const t3param& v,double x) {
+		double lnx = log(x);
+		double y = 1.0 / (v._DA + v._DB * pow(lnx,1) + v._DC * pow(lnx,2) + v._DD * pow(lnx,3));
+		return y;
+}
+
 #endif
