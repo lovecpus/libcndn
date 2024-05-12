@@ -67,6 +67,9 @@ public:
 
 	inline bool isEnable() { return bitRead(m_bit,0); }
 	bool toggle(uint8_t bit) { bitToggle(m_bit,bit); return bitRead(m_bit,bit); }
+	bool isset(uint8_t bit) { return bitRead(m_bit,bit); }
+	bool bitset(uint8_t bit) { return bitWrite(m_bit,bit, 1); }
+	bool bitclr(uint8_t bit) { return bitWrite(m_bit,bit, 0); }
 };
 
 template<uint8_t numIOs>
@@ -253,33 +256,33 @@ public:
 
 class CNLineParser {
 private:
-  String  data;
-  String  cmds;
+	String  data;
+	String  cmds;
 public:
-  bool readline(char c, const char _dlim='\n', uint16_t sz=128) {
-    if (c == _dlim) {
-      cmds = data;
-      clear();
-      return true;
-    } else if (data.length() < sz) {
-      data.concat(c);
-    }
-    return false;
-  }
+	bool readline(char c, const char _dlim='\n', uint16_t sz=128) {
+		if (c == _dlim) {
+			cmds = data;
+			clear();
+			return true;
+		} else if (data.length() < sz) {
+			data.concat(c);
+		}
+		return false;
+	}
 
-  const String& getCommand() { return cmds; }
+	const String& getCommand() { return cmds; }
 
-  void clear() {
+	void clear() {
 		if (data.length()>0)
-    	data.remove(0,data.length());
-  }
+			data.remove(0,data.length());
+	}
 
-  void clearCommand() {
+	void clearCommand() {
 		if (cmds.length()>0)
-    	cmds.remove(0,cmds.length());
-  }
+			cmds.remove(0,cmds.length());
+	}
 
-  virtual bool process(Stream& strm) = 0;
+	virtual bool process(Stream& strm) = 0;
 };
 
 #define START_POS(X,Y)	int npos = -1; int cpos = (X).indexOf(Y, npos+1); if (cpos == -1) break; npos = cpos;
@@ -296,8 +299,63 @@ public:
 			}
 		}
 	}
+
+	static uint16_t CRC16(uint16_t crc, const void *ptr, size_t len) {
+		const uint8_t *crcdata = (const uint8_t *)ptr;
+		for(size_t i=0;i<len;i++){
+			crc = crc ^ ((*crcdata)<<8);
+			crcdata ++;
+			for(uint8_t j=0;j<8;j++){
+				if(crc & 0x8000){
+					crc = (crc<<1) ^ 0x1021;
+				}else{
+					crc = crc<<1;
+				}
+			}
+		}
+		return crc;
+	}
+};
+
+class CNStream : public Stream
+{
+private:
+	uint8_t		*mem;
+	size_t 		tx, rx;
+	size_t 		memsize;
+public:
+	CNStream(size_t _size): memsize(_size), mem(nullptr), tx(0), rx(0) {
+		mem = (uint8_t*)malloc(memsize);
+	}
+
+	~CNStream() {
+		if (mem != nullptr) {
+			free(mem);
+			mem = nullptr;
+		}
+	}
+
+		virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
+		virtual int read() { return mem[rx++]; rx=rx%memsize; }
+		virtual int peek() { return mem[rx]; }
+	virtual size_t write(uint8_t dat) { mem[tx++]=dat; tx=tx%memsize; return 1; }
 };
 
 #define	CN_UNUSED(_X)		(void(_X))
+#define	CNUNUSED(_X)		((_X)=(_X))
+
+struct t3param {
+	double	_DA;
+	double	_DB;
+	double	_DC;
+	double	_DD;
+	t3param(double _a,double _b,double _c,double _d):_DA(_a),_DB(_b),_DC(_c),_DD(_d){}
+};
+
+inline double t3curve(const t3param& v,double x) {
+		double lnx = log(x);
+		double y = 1.0 / (v._DA + v._DB * pow(lnx,1) + v._DC * pow(lnx,2) + v._DD * pow(lnx,3));
+		return y;
+}
 
 #endif
