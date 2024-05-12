@@ -297,7 +297,7 @@ public:
 		}
 	}
 
-	static uint16_t CRC16(uint16_t& crc, const void *ptr, size_t len) {
+	static uint16_t CRC16(uint16_t crc, const void *ptr, size_t len) {
 		const uint8_t *crcdata = (const uint8_t *)ptr;
 		for(size_t i=0;i<len;i++){
 			crc = crc ^ ((*crcdata)<<8);
