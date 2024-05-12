@@ -316,9 +316,7 @@ public:
 		return crc;
 	}
 
-  static String print_r(const char *form, ...) {
-    va_list args;
-    va_start(args, form);
+  static String print_v(const char *form, va_list args) {
     char *buff = (char *)malloc(4096);
     buff[0] = 0;
     int size = vsprintf(buff, form, args);
@@ -329,6 +327,11 @@ public:
       free(buff);
     }
     return ret;
+  }
+
+  static String print_r(const char *form, ...) {
+    va_list args; va_start(args, form);
+		return print_v(form, args);
   }
 };
 
