@@ -315,6 +315,21 @@ public:
 		}
 		return crc;
 	}
+
+  static String print_r(const char *form, ...) {
+    va_list args;
+    va_start(args, form);
+    char *buff = (char *)malloc(4096);
+    buff[0] = 0;
+    int size = vsprintf(buff, form, args);
+    if (size>=0) buff[size] = 0;
+    String ret;
+    if(buff) {
+      ret = buff;
+      free(buff);
+    }
+    return ret;
+  }
 };
 
 class CNStream : public Stream
