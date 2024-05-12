@@ -67,6 +67,9 @@ public:
 
 	inline bool isEnable() { return bitRead(m_bit,0); }
 	bool toggle(uint8_t bit) { bitToggle(m_bit,bit); return bitRead(m_bit,bit); }
+	bool isset(uint8_t bit) { return bitRead(m_bit,bit); }
+	bool bitset(uint8_t bit) { return bitWrite(m_bit,bit, 1); }
+	bool bitclr(uint8_t bit) { return bitWrite(m_bit,bit, 0); }
 };
 
 template<uint8_t numIOs>
