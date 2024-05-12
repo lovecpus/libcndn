@@ -253,33 +253,33 @@ public:
 
 class CNLineParser {
 private:
-  String  data;
-  String  cmds;
+	String  data;
+	String  cmds;
 public:
-  bool readline(char c, const char _dlim='\n', uint16_t sz=128) {
-    if (c == _dlim) {
-      cmds = data;
-      clear();
-      return true;
-    } else if (data.length() < sz) {
-      data.concat(c);
-    }
-    return false;
-  }
+	bool readline(char c, const char _dlim='\n', uint16_t sz=128) {
+		if (c == _dlim) {
+			cmds = data;
+			clear();
+			return true;
+		} else if (data.length() < sz) {
+			data.concat(c);
+		}
+		return false;
+	}
 
-  const String& getCommand() { return cmds; }
+	const String& getCommand() { return cmds; }
 
-  void clear() {
+	void clear() {
 		if (data.length()>0)
-    	data.remove(0,data.length());
-  }
+			data.remove(0,data.length());
+	}
 
-  void clearCommand() {
+	void clearCommand() {
 		if (cmds.length()>0)
-    	cmds.remove(0,cmds.length());
-  }
+			cmds.remove(0,cmds.length());
+	}
 
-  virtual bool process(Stream& strm) = 0;
+	virtual bool process(Stream& strm) = 0;
 };
 
 #define START_POS(X,Y)	int npos = -1; int cpos = (X).indexOf(Y, npos+1); if (cpos == -1) break; npos = cpos;
@@ -297,20 +297,21 @@ public:
 		}
 	}
 
-	unsigned short CRC16(uint16_t& crc, const uint8_t * crcdata, size_t len) {
-	  for(size_t i=0;i<len;i++){
-	    crc = crc ^ ((*crcdata)<<8);
-	    crcdata++;                 
-	    for(uint8_t j=0;j<8;j++){
-	      if(crc & 0x8000){
-	        crc = (crc<<1) ^ 0x1021;              
-	      }else{
-	        crc = crc<<1;    
-	      }           
-	    }
-	  }
-	  return crc;                        
-	}	
+	static uint16_t CRC16(uint16_t& crc, const void *ptr, size_t len) {
+		const uint8_t *crcdata = (const uint8_t *)ptr;
+		for(size_t i=0;i<len;i++){
+			crc = crc ^ ((*crcdata)<<8);
+			crcdata ++;
+			for(uint8_t j=0;j<8;j++){
+				if(crc & 0x8000){
+					crc = (crc<<1) ^ 0x1021;
+				}else{
+					crc = crc<<1;
+				}
+			}
+		}
+		return crc;
+	}
 };
 
 class CNStream : public Stream
@@ -331,9 +332,9 @@ public:
 		}
 	}
 
-    virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
-    virtual int read() { return mem[rx++]; rx=rx%memsize; }
-    virtual int peek() { return mem[rx]; }
+		virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
+		virtual int read() { return mem[rx++]; rx=rx%memsize; }
+		virtual int peek() { return mem[rx]; }
 	virtual size_t write(uint8_t dat) { mem[tx++]=dat; tx=tx%memsize; return 1; }
 };
 
