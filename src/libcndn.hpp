@@ -374,8 +374,8 @@ private:
 	size_t 		tx, rx;
 	size_t 		memsize;
 public:
-	CNStream(size_t _size): memsize(_size), mem(nullptr), tx(0), rx(0) {
-		mem = (uint8_t*)malloc(memsize);
+	CNStream(size_t _size): tx(0), rx(0) {
+		mem = (uint8_t*)malloc(memsize=_size);
 	}
 
 	~CNStream() {
