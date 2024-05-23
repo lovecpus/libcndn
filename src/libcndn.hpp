@@ -287,7 +287,7 @@ public:
 };
 
 class CNLineParser {
-private:
+protected:
 	String  data;
 	String  cmds;
 public:
