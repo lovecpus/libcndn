@@ -29,6 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define STRDEFINE(str) VALDEFINE(str)
 
 #include <Arduino.h>
+#include <stdarg.h>
 
 class CNTimeout
 {
