@@ -350,16 +350,11 @@ public:
 	}
 
   static String print_v(const char *form, va_list args) {
-    char *buff = (char *)malloc(4096);
+    char buff[4096];
     buff[0] = 0;
     int size = vsprintf(buff, form, args);
     if (size>=0) buff[size] = 0;
-    String ret;
-    if(buff) {
-      ret = buff;
-      free(buff);
-    }
-    return ret;
+    return buff;
   }
 
   static String print_r(const char *form, ...) {
