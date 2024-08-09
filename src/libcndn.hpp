@@ -328,7 +328,13 @@ public:
 		for(uint8_t i=1; i < 127; i++) {
 			wire.beginTransmission(i);
 			if (wire.endTransmission() == 0x00) {
+#if ARDUINO_ARCH_AVR
+				strm.print("I2C found: 0x");
+				strm.print(i, HEX);
+				strm.print("\n");
+#else
 				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
+#endif
 			}
 		}
 	}
