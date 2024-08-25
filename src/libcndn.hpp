@@ -367,6 +367,13 @@ public:
     va_list args; va_start(args, form);
 		return print_v(form, args);
   }
+
+	static void pulsePin(uint8_t _pin, uint32_t onTime=100000, uint32_t offTime=100000) {
+		digitalWrite(_pin, HIGH);
+		if(onTime>1000)delay(onTime/1000); delayMicroseconds(onTime%1000);
+		digitalWrite(_pin, LOW);
+		if(offTime>1000)delay(offTime/1000); delayMicroseconds(offTime%1000);
+	}
 };
 
 class CNStream : public Stream
