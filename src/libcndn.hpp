@@ -408,6 +408,8 @@ public:
 	CNStream	rxs, txs;
 	RTStream(size_t txSize, size_t rxSize) : rxs(rxSize), txs(txSize) {}
 
+	size_t writeRx(uint8_t dat) { return rxs.write(dat); }
+
 	virtual int available() { return rxs.available(); }
 	virtual int read() { return rxs.read(); }
 	virtual int peek() { return rxs.peek(); }
