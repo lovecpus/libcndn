@@ -396,10 +396,22 @@ public:
 		}
 	}
 
-		virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
-		virtual int read() { return mem[rx++]; rx=rx%memsize; }
-		virtual int peek() { return mem[rx]; }
+	virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
+	virtual int read() { return mem[rx++]; rx=rx%memsize; }
+	virtual int peek() { return mem[rx]; }
 	virtual size_t write(uint8_t dat) { mem[tx++]=dat; tx=tx%memsize; return 1; }
+};
+
+class RTStream : public Stream
+{
+public:
+	CNStream	rxs, txs;
+	RTStream(size_t txSize, size_t rxSize) : rxs(rxSize), txs(txSize) {}
+
+	virtual int available() { return rxs.available(); }
+	virtual int read() { return rxs.read(); }
+	virtual int peek() { return rxs.peek(); }
+	virtual size_t write(uint8_t dat) { return txs.write(dat); }
 };
 
 #define	CN_UNUSED(_X)		(void(_X))
