@@ -397,12 +397,20 @@ public:
 	}
 
 	virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
-	virtual int read() { 
-		size_t pos = rx;
-		rx=(rx+1)%memsize;
-		return mem[pos];
+	virtual int read() {
+		if (available()) {
+			size_t pos = rx;
+			rx=(rx+1)%memsize;
+			return mem[pos];
+		}
+		return -1;
 	}
-	virtual int peek() { return mem[rx]; }
+	virtual int peek() {
+		if (available()) {
+			return mem[rx];
+		}
+		return -1;
+	}
 	virtual size_t write(uint8_t dat) {
 		mem[tx++]=dat;
 		tx=tx%memsize;
