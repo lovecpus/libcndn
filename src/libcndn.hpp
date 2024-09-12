@@ -399,7 +399,12 @@ public:
 	virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
 	virtual int read() { return mem[rx++]; rx=rx%memsize; }
 	virtual int peek() { return mem[rx]; }
-	virtual size_t write(uint8_t dat) { mem[tx++]=dat; tx=tx%memsize; return 1; }
+	virtual size_t write(uint8_t dat) {
+		mem[tx++]=dat;
+		tx=tx%memsize;
+		if (tx==rx) rx=(rx+1)%memsize;
+		return 1;
+	}
 };
 
 class RTStream : public Stream
