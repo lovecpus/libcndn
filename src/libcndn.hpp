@@ -413,8 +413,10 @@ public:
 
 class RTStream : public Stream
 {
+private:
+	CNStream	rxs;
 public:
-	CNStream	rxs, txs;
+	CNStream	txs;
 	RTStream(size_t txSize, size_t rxSize) : rxs(rxSize), txs(txSize) {}
 
 	size_t writeRx(uint8_t dat) { return rxs.write(dat); }
