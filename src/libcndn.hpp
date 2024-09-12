@@ -398,7 +398,7 @@ public:
 
 	virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
 	virtual int read() {
-		if (available()) {
+		if (available()>0) {
 			size_t pos = rx;
 			rx=(rx+1)%memsize;
 			return mem[pos];
@@ -406,7 +406,7 @@ public:
 		return -1;
 	}
 	virtual int peek() {
-		if (available()) {
+		if (available()>0) {
 			return mem[rx];
 		}
 		return -1;
@@ -427,7 +427,7 @@ public:
 	CNStream	txs;
 	RTStream(size_t txSize, size_t rxSize) : rxs(rxSize), txs(txSize) {}
 
-	size_t writeRx(uint8_t dat) { return rxs.write(dat); }
+	size_t recvice(uint8_t dat) { return rxs.write(dat); }
 
 	virtual int available() { return rxs.available(); }
 	virtual int read() { return rxs.read(); }
