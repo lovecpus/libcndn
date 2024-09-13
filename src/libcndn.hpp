@@ -103,6 +103,8 @@ public:
 	bool isset(uint8_t bit) { return bitRead(m_bit,bit); }
 	bool bitset(uint8_t bit) { return bitWrite(m_bit,bit, 1); }
 	bool bitclr(uint8_t bit) { return bitWrite(m_bit,bit, 0); }
+
+	inline uint32_t ellipsed(uint32_t _now) { return _now - m_sta; }
 };
 
 template<uint8_t numIOs>
