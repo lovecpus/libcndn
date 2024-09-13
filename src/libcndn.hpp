@@ -452,4 +452,810 @@ inline double t3curve(const t3param& v,double x) {
 		return y;
 }
 
+
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
+
+#include <Stream.h>
+
+#if (USE_RTU_LOG)
+#define RTU_LOG(...)             \
+	{                              \
+		Serial.print("[");           \
+		Serial.print(__FUNCTION__);  \
+		Serial.print("(): ");        \
+		Serial.print(__LINE__);      \
+		Serial.print(" ] ");         \
+		Serial.println(__VA_ARGS__); \
+	}
+#else
+#define RTU_LOG(...)
+#endif
+
+#ifndef RTU_BROADCAST_ADDRESS
+#define RTU_BROADCAST_ADDRESS 0x00
+#endif
+
+class CNRTU
+{
+protected:
+	typedef struct
+	{
+		uint16_t len;
+		uint8_t id;
+		uint8_t cmd;
+		uint8_t payload[0];
+		uint16_t cs;
+	} __attribute__((packed)) tagRTUHeader, *pRTUHeader;
+
+	typedef enum
+	{
+		eERROR_ILLEGAL_FUNCTION = 0x01,
+		eERROR_ILLEGAL_ADDRESS,
+		eERROR_ILLEGAL_VALUE,
+		eERROR_RTU_CRC = 0x08,
+		eERROR_RTU_RECV,
+		eERROR_MEMORY,
+		eERROR_RTU_ID
+	} ENUM_RTU_ERRORS;
+
+	typedef enum
+	{
+		eCMD_READ_COILS 					= 0x01,
+		eCMD_READ_DISCRETE 				= 0x02,
+		eCMD_READ_HOLDING 				= 0x03,
+		eCMD_READ_INPUT 					= 0x04,
+		eCMD_WRITE_COILS 					= 0x05,
+		eCMD_WRITE_HOLDING 				= 0x06,
+		eCMD_WRITE_MULTI_COILS 		= 0x0F,
+		eCMD_WRITE_MULTI_HOLDING 	= 0x10
+	} ENUM_RTU_COMMAND;
+
+	void clearRecvBuffer()
+	{
+		while (_s->available())
+		{
+			_s->read();
+			delay(2);
+		}
+	}
+
+	uint16_t calculateCRC(uint8_t *data, uint8_t len)
+	{
+		uint16_t crc = 0xFFFF;
+		for (uint8_t pos = 0; pos < len; pos++)
+		{
+			crc ^= (uint16_t)data[pos];
+			for (uint8_t i = 8; i != 0; i--)
+			{
+				if ((crc & 0x0001) != 0)
+				{
+					crc >>= 1;
+					crc ^= 0xA001;
+				}
+				else
+				{
+					crc >>= 1;
+				}
+			}
+		}
+		crc = ((crc & 0x00FF) << 8) | ((crc & 0xFF00) >> 8);
+		return crc;
+	}
+
+	pRTUHeader packed(uint8_t id, ENUM_RTU_COMMAND cmd, void *data, uint16_t size)
+	{
+		return packed(id, (uint8_t)cmd, data, size);
+	}
+
+	pRTUHeader packed(uint8_t id, uint8_t cmd, void *data, uint16_t size)
+	{
+		pRTUHeader header = NULL;
+		uint16_t crc = 0;
+		if ((data == NULL) || (size == 0))
+			return NULL;
+		if ((header = (pRTUHeader)malloc(sizeof(tagRTUHeader) + size)) == NULL)
+		{
+			RTU_LOG("Memory ERROR");
+			return NULL;
+		}
+		header->len = sizeof(tagRTUHeader) + size - 2;
+		header->id = id;
+		header->cmd = cmd;
+		memcpy(header->payload, data, size);
+		crc = calculateCRC((uint8_t *)&(header->id), (header->len) - 2);
+		header->payload[size] = (crc >> 8) & 0xFF;
+		header->payload[size + 1] = crc & 0xFF;
+		return header;
+	}
+
+	void sendPackage(pRTUHeader header)
+	{
+		clearRecvBuffer();
+		if (header != NULL)
+		{
+			if (_dePin > 0)
+			{
+				digitalWrite(_dePin, HIGH);
+				delayMicroseconds(50);
+			}
+			_s->write((uint8_t *)&(header->id), header->len);
+			_s->flush();
+
+			free(header);
+			if (_dePin > 0)
+			{
+				// delayMicroseconds(50);
+				digitalWrite(_dePin, LOW);
+			}
+		}
+	}
+
+	pRTUHeader recvAndParsePackage(uint8_t id, uint8_t cmd, uint16_t data, uint8_t *error)
+	{
+		if (id > 0xF7)
+			return NULL;
+		if (id == 0)
+		{
+			if (error != NULL)
+				*error = 0;
+			return NULL;
+		}
+
+		uint8_t head[4] = {0, 0, 0, 0};
+		uint16_t crc = 0;
+		pRTUHeader header = NULL;
+
+LOOP:
+		uint16_t remain, index = 0;
+		uint32_t time = millis();
+		for (int i = 0; i < 4;)
+		{
+			if (_s->available())
+			{
+				head[index++] = (uint8_t)_s->read();
+				RTU_LOG(head[index - 1], HEX);
+				if ((index == 1) && (head[0] != id))
+				{
+					index = 0;
+				}
+				else if ((index == 2) && ((head[1] & 0x7F) != cmd))
+				{
+					index = 0;
+				}
+				i = index;
+				time = millis();
+			}
+			if ((millis() - time) > _timeout)
+			{
+				RTU_LOG("ERROR");
+				RTU_LOG(millis() - time);
+				break;
+			}
+		}
+
+		if (index != 4)
+		{
+			RTU_LOG();
+			if (error != NULL)
+				*error = eERROR_RTU_RECV;
+			return NULL;
+		}
+		switch (head[1])
+		{
+		case eCMD_READ_COILS:
+		case eCMD_READ_DISCRETE:
+		case eCMD_READ_HOLDING:
+		case eCMD_READ_INPUT:
+			if (head[2] != (data & 0xFF))
+			{
+				index = 0;
+				goto LOOP;
+			}
+			index = 5 + head[2];
+			break;
+		case eCMD_WRITE_COILS:
+		case eCMD_WRITE_HOLDING:
+		case eCMD_WRITE_MULTI_COILS:
+		case eCMD_WRITE_MULTI_HOLDING:
+			if (((head[2] << 8) | (head[3])) != data)
+			{
+				index = 0;
+				goto LOOP;
+			}
+			index = 8;
+			break;
+		default:
+			index = 5;
+			break;
+		}
+		if ((header = (pRTUHeader)malloc(index + 2)) == NULL)
+		{
+			RTU_LOG("Memory ERROR");
+			if (error != NULL)
+				*error = eERROR_RTU_RECV;
+			return NULL;
+		}
+		header->len = index;
+		memcpy((uint8_t *)&(header->id), head, 4);
+		remain = index - 4;
+		index = 2;
+		time = millis();
+		while (remain)
+		{
+			RTU_LOG(_s->available());
+			if (_s->available())
+			{
+				*(header->payload + index) = (uint8_t)_s->read();
+				index++;
+				time = millis();
+				remain--;
+			}
+			if ((millis() - time) > _timeout)
+			{
+				free(header);
+				if (error != NULL)
+					*error = eERROR_RTU_RECV;
+				RTU_LOG();
+				return NULL;
+			}
+		}
+		crc = (header->payload[(header->len) - 4] << 8) | header->payload[(header->len) - 3];
+
+		if (crc != calculateCRC((uint8_t *)&(header->id), (header->len) - 2))
+		{
+			free(header);
+			RTU_LOG("CRC ERROR");
+			if (error != NULL)
+				*error = eERROR_RTU_RECV;
+			return NULL;
+		}
+		if (error != NULL)
+			*error = 0;
+		if (head[1] & 0x80)
+		{
+			*error = head[2];
+		}
+
+		return header;
+	}
+
+public:
+	CNRTU(Stream *s, int dePin) : _timeout(100), _s(s), _dePin(dePin)
+	{
+		if (_dePin > 0)
+		{
+			pinMode(_dePin, OUTPUT);
+		}
+	}
+	CNRTU(Stream *s) : _timeout(100), _s(s), _dePin(-1)
+	{
+		if (_dePin > 0)
+		{
+			pinMode(_dePin, OUTPUT);
+		}
+	}
+	CNRTU()
+			: _timeout(100), _s(NULL), _dePin(-1)
+	{
+		if (_dePin > 0)
+		{
+			pinMode(_dePin, OUTPUT);
+		}
+	}
+	~CNRTU() {}
+
+	void setTimeoutTimeMs(uint32_t timeout = 100)
+	{
+		_timeout = timeout;
+	}
+
+	/**
+	 * @brief Read a coils Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Coils register address.
+	 * @return Return the value of the coils register value.
+	 * @n      true: The value of the coils register value is 1.
+	 * @n      false: The value of the coils register value is 0.
+	 */
+	bool readCoilsRegister(uint8_t id, uint16_t reg)
+	{
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), 0x00, 0x01};
+		bool val = false;
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return 0;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_COILS, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_COILS, 1, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (header->payload[1] & 0x01)
+				val = true;
+			free(header);
+		}
+		RTU_LOG(val, HEX);
+		return val;
+	}
+
+	/**
+	 * @brief Read a discrete input register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @return Return the value of the coils register value.
+	 * @n      true: The value of the coils register value is 1.
+	 * @n      false: The value of the coils register value is 0.
+	 */
+	bool readDiscreteInputsRegister(uint8_t id, uint16_t reg)
+	{
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), 0x00, 0x01};
+		bool val = false;
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return 0;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_DISCRETE, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_DISCRETE, 1, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (header->payload[1] & 0x01)
+				val = true;
+			free(header);
+		}
+		RTU_LOG(val, HEX);
+		return val;
+	}
+	/**
+	 * @brief Read a holding Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Holding register address.
+	 * @return Return the value of the holding register value.
+	 */
+	uint16_t readHoldingRegister(uint8_t id, uint16_t reg)
+	{
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), 0x00, 0x01};
+		uint16_t val = 0;
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return 0;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_HOLDING, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_HOLDING, 2, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			val = (header->payload[1] << 8) | header->payload[2];
+			free(header);
+		}
+		// RTU_LOG(val, HEX);
+		return val;
+	}
+
+	/**
+	 * @brief Read a input Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: input register address.
+	 * @return Return the value of the input register value.
+	 */
+	uint16_t readInputRegister(uint8_t id, uint16_t reg)
+	{
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), 0x00, 0x01};
+		uint16_t val = 0;
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return 0;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_INPUT, temp, sizeof(temp));
+		RTU_LOG(header->len, HEX);
+		RTU_LOG(header->id, HEX);
+		RTU_LOG(header->cmd, HEX);
+		for (uint8_t i = 0; i < sizeof(temp) + 2; i++)
+			RTU_LOG(header->payload[i], HEX);
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_INPUT, 2, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			val = (header->payload[1] << 8) | header->payload[2];
+			free(header);
+		}
+		RTU_LOG(val, HEX);
+		return val;
+	}
+	/**
+	 * @brief Write a coils Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Coils register address.
+	 * @param flag: The value of the register value which will be write, 0 ro 1.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t writeCoilsRegister(uint8_t id, uint16_t reg, bool flag)
+	{
+		uint16_t val = flag ? 0xFF00 : 0x0000;
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((val >> 8) & 0xFF), (uint8_t)(val & 0xFF)};
+		uint8_t ret = 0;
+		if (id > 0xF7)
+		{
+			RTU_LOG("Device ID error");
+			return 0;
+		}
+		pRTUHeader header = packed(id, eCMD_WRITE_COILS, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_WRITE_COILS, reg, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			free(header);
+		}
+		return ret;
+	}
+	/**
+	 * @brief Write a holding register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Holding register address.
+	 * @param val: The value of the register value which will be write.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t writeHoldingRegister(uint8_t id, uint16_t reg, uint16_t val)
+	{
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((val >> 8) & 0xFF), (uint8_t)(val & 0xFF)};
+		uint8_t ret = 0;
+		if (id > 0xF7)
+		{
+			RTU_LOG("Device ID error");
+			return 0;
+		}
+		pRTUHeader header = packed(id, eCMD_WRITE_HOLDING, temp, sizeof(temp));
+		uint8_t *data = NULL;
+		data = (uint8_t *)malloc(sizeof(tagRTUHeader));
+		memcpy(data, header, sizeof(tagRTUHeader));
+		while (data != NULL)
+		{
+			RTU_LOG(*data, HEX);
+			data++;
+		}
+		free(data);
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_WRITE_HOLDING, reg, &ret);
+		val = 0xFFFF;
+		if ((ret == 0) && (header != NULL))
+		{
+			val = (header->payload[2] << 8) | header->payload[3];
+			free(header);
+		}
+		// RTU_LOG(val, HEX);
+		return ret;
+	}
+
+	/**
+	 * @brief Read multiple coils Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Coils register address.
+	 * @param regNum: Number of coils Register.
+	 * @param data: Storage register worth pointer.
+	 * @param size: Cache size of data.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t readCoilsRegister(uint8_t id, uint16_t reg, uint16_t regNum, uint8_t *data, uint16_t size)
+	{
+		uint8_t length = regNum / 8 + ((regNum % 8) ? 1 : 0);
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((regNum >> 8) & 0xFF), (uint8_t)(regNum & 0xFF)};
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return eERROR_RTU_ID;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_COILS, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_COILS, length, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (data != NULL)
+			{
+				size = (size > length) ? length : size;
+				memcpy(data, (uint8_t *)&(header->payload[1]), size);
+			}
+			free(header);
+		}
+		return ret;
+	}
+	/**
+	 * @brief Read multiple discrete inputs register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Discrete inputs register. address.
+	 * @param regNum: Number of coils Register.
+	 * @param data: Storage register worth pointer.
+	 * @param size: Cache size of data.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t readDiscreteInputsRegister(uint8_t id, uint16_t reg, uint16_t regNum, uint8_t *data, uint16_t size)
+	{
+		uint8_t length = regNum / 8 + ((regNum % 8) ? 1 : 0);
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((regNum >> 8) & 0xFF), (uint8_t)(regNum & 0xFF)};
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return eERROR_RTU_ID;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_DISCRETE, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_DISCRETE, length, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (data != NULL)
+			{
+				size = (size > length) ? length : size;
+				memcpy(data, (uint8_t *)&(header->payload[1]), size);
+			}
+			free(header);
+		}
+		return ret;
+	}
+	/**
+	 * @brief Read multiple Holding register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Holding register.
+	 * @param data: Storage register worth pointer.
+	 * @param size: Cache size.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t readHoldingRegister(uint8_t id, uint16_t reg, void *data, uint16_t size)
+	{
+		uint8_t length = size / 2 + ((size % 2) ? 1 : 0);
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((length >> 8) & 0xFF), (uint8_t)(length & 0xFF)};
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return eERROR_RTU_ID;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_HOLDING, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_HOLDING, length * 2, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (data != NULL)
+				memcpy(data, (uint8_t *)&(header->payload[1]), size);
+			free(header);
+		}
+		return ret;
+	}
+
+	/**
+	 * @brief Read multiple Input register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Input register.
+	 * @param data: Storage register worth pointer.
+	 * @param regNum: register numbers.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t readInputRegister(uint8_t id, uint16_t reg, void *data, uint16_t size)
+	{
+		uint8_t length = size / 2 + ((size % 2) ? 1 : 0);
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((length >> 8) & 0xFF), (uint8_t)(length & 0xFF)};
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return eERROR_RTU_ID;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_INPUT, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_INPUT, length * 2, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (data != NULL)
+				memcpy(data, (uint8_t *)&(header->payload[1]), size);
+			free(header);
+		}
+		RTU_LOG(val, HEX);
+		return ret;
+	}
+
+	/**
+	 * @brief Read multiple Holding register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Holding register.
+	 * @param data: Storage register worth pointer.
+	 * @param regNum: register numbers.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t readHoldingRegister(uint8_t id, uint16_t reg, uint16_t *data, uint16_t regNum)
+	{
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((regNum >> 8) & 0xFF), (uint8_t)(regNum & 0xFF)};
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return eERROR_RTU_ID;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_HOLDING, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_HOLDING, regNum * 2, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (data != NULL)
+			{
+				for (int i = 0; i < regNum; i++)
+				{
+					data[i] = ((header->payload[1 + 2 * i]) << 8) | (header->payload[2 + 2 * i]);
+				}
+			}
+			free(header);
+		}
+		return ret;
+	}
+
+	/**
+	 * @brief Read multiple Input register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Input register.
+	 * @param data: Storage register worth pointer.
+	 * @param regNum: register numbers.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t readInputRegister(uint8_t id, uint16_t reg, uint16_t *data, uint16_t regNum)
+	{
+		uint8_t temp[] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)((regNum >> 8) & 0xFF), (uint8_t)(regNum & 0xFF)};
+		uint8_t ret = 0;
+		if ((id == 0) && (id > 0xF7))
+		{
+			RTU_LOG("Device ID error");
+			return eERROR_RTU_ID;
+		}
+		pRTUHeader header = packed(id, eCMD_READ_INPUT, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_READ_INPUT, regNum * 2, &ret);
+		if ((ret == 0) && (header != NULL))
+		{
+			if (data != NULL)
+			{
+				for (int i = 0; i < regNum; i++)
+				{
+					data[i] = ((header->payload[1 + 2 * i]) << 8) | (header->payload[2 + 2 * i]);
+				}
+			}
+			free(header);
+		}
+		return ret;
+	}
+
+	/**
+	 * @brief Write multiple coils Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Coils register address.
+	 * @param regNum: Numbers of Coils register.
+	 * @param data: Storage register worth pointer.
+	 * @param size: Cache size.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t writeCoilsRegister(uint8_t id, uint16_t reg, uint16_t regNum, uint8_t *data, uint16_t size)
+	{
+		uint16_t length = regNum / 8 + ((regNum % 8) ? 1 : 0);
+		if (size < length)
+			return (uint8_t)eERROR_ILLEGAL_VALUE;
+		uint8_t temp[size + 5];
+		temp[0] = (uint8_t)((reg >> 8) & 0xFF);
+		temp[1] = (uint8_t)(reg & 0xFF);
+		temp[2] = (uint8_t)((regNum >> 8) & 0xFF);
+		temp[3] = (uint8_t)(regNum & 0xFF);
+		temp[4] = (uint8_t)length;
+		uint8_t ret = 0;
+		if (id > 0xF7)
+		{
+			RTU_LOG("Device ID error");
+			return (uint8_t)eERROR_RTU_ID;
+		}
+		memcpy(temp + 5, data, size);
+		pRTUHeader header = packed(id, eCMD_WRITE_MULTI_COILS, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_WRITE_MULTI_COILS, reg, &ret);
+		size = 0;
+		if ((ret == 0) && (header != NULL))
+		{
+			size = (header->payload[2] << 8) | header->payload[3];
+			free(header);
+		}
+		return ret;
+	}
+	/**
+	 * @brief Write multiple Holding Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Holding register address.
+	 * @param data: Storage register worth pointer.
+	 * @param size: Cache size.
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t writeHoldingRegister(uint8_t id, uint16_t reg, void *data, uint16_t size)
+	{
+		if (((size % 2) != 0) || (size > 250) || data == NULL)
+			return (uint8_t)eERROR_ILLEGAL_VALUE;
+		// #if defined(ESP8266)
+		uint8_t temp[size + 5];
+		temp[0] = (uint8_t)((reg >> 8) & 0xFF);
+		temp[1] = (uint8_t)(reg & 0xFF);
+		temp[2] = (uint8_t)(((size / 2) >> 8) & 0xFF);
+		temp[3] = (uint8_t)((size / 2) & 0xFF);
+		temp[4] = (uint8_t)size;
+		// #else
+		// uint8_t temp[size + 5] = {(uint8_t)((reg >> 8) & 0xFF), (uint8_t)(reg & 0xFF), (uint8_t)(((size/2) >> 8) & 0xFF), (uint8_t)((size/2) & 0xFF),(uint8_t)size};
+		// #endif
+		uint8_t ret = 0;
+		if (id > 0xF7)
+		{
+			RTU_LOG("Device ID error");
+			return (uint8_t)eERROR_RTU_ID;
+		}
+		memcpy(temp + 5, data, size);
+		pRTUHeader header = packed(id, eCMD_WRITE_MULTI_HOLDING, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_WRITE_MULTI_HOLDING, reg, &ret);
+		size = 0;
+		if ((ret == 0) && (header != NULL))
+		{
+			size = (header->payload[2] << 8) | header->payload[3];
+			free(header);
+		}
+		return ret;
+	}
+	/**
+	 * @brief Write multiple Holding Register.
+	 * @param id:  device ID. (0~247), 0 is broadcast
+	 * @param reg: Holding register address.
+	 * @param data: Storage register worth pointer.
+	 * @param regNum: Number of coils Register..
+	 * @return ENUM_RTU_ERRORS
+	 */
+	uint8_t writeHoldingRegister(uint8_t id, uint16_t reg, uint16_t *data, uint16_t regNum)
+	{
+		uint16_t size = regNum * 2;
+		uint8_t *pBuf = (uint8_t *)data;
+		uint8_t temp[size + 5];
+		temp[0] = (uint8_t)((reg >> 8) & 0xFF);
+		temp[1] = (uint8_t)(reg & 0xFF);
+		temp[2] = (uint8_t)(((size / 2) >> 8) & 0xFF);
+		temp[3] = (uint8_t)((size / 2) & 0xFF);
+		temp[4] = (uint8_t)size;
+		uint8_t ret = 0;
+		if (id > 0xF7)
+		{
+			RTU_LOG("Device ID error");
+			return (uint8_t)eERROR_RTU_ID;
+		}
+		// memcpy(temp+5, data, size);
+		for (int i = 0; i < regNum; i++)
+		{
+			temp[5 + i * 2] = pBuf[2 * i + 1];
+			temp[6 + i * 2] = pBuf[2 * i];
+		}
+		pRTUHeader header = packed(id, eCMD_WRITE_MULTI_HOLDING, temp, sizeof(temp));
+		sendPackage(header);
+		header = recvAndParsePackage(id, (uint8_t)eCMD_WRITE_MULTI_HOLDING, reg, &ret);
+		size = 0;
+		if ((ret == 0) && (header != NULL))
+		{
+			size = (header->payload[2] << 8) | header->payload[3];
+			free(header);
+		}
+		return ret;
+	}
+
+private:
+	uint32_t _timeout;
+	Stream *_s;
+	int _dePin;
+};
+
 #endif
