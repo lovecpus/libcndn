@@ -356,7 +356,7 @@ public:
 	}
 
   static String print_v(const char *form, va_list args) {
-    char buff[1024];
+    char buff[512];
     buff[0] = 0;
     int size = vsprintf(buff, form, args);
     if (size>=0) buff[size] = 0;
