@@ -424,6 +424,8 @@ public:
 		if (tx==rx) rx=(rx+1)%memsize;
 		return 1;
 	}
+
+	virtual void flush() {}
 };
 
 class RTStream : public Stream
@@ -440,6 +442,7 @@ public:
 	virtual int read() { return rxs.read(); }
 	virtual int peek() { return rxs.peek(); }
 	virtual size_t write(uint8_t dat) { return txs.write(dat); }
+	virtual void flush() {}
 };
 
 #define	CN_UNUSED(_X)		(void(_X))
