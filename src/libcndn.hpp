@@ -70,6 +70,11 @@ public:
 		static uint32_t s_ss = 0;
 		return s_ss;
 	}
+	static CNTimeout& DISABLE()
+	{
+		static CNTimeout s_dis(CNTimeout().disable());
+		return s_dis;
+	}
 
 	static uint32_t update() {
 		lastms() = millis();
@@ -358,7 +363,7 @@ public:
 	}
 
   static String print_v(const char *form, va_list args) {
-    char buff[512];
+    char buff[128];
     buff[0] = 0;
     int size = vsprintf(buff, form, args);
     if (size>=0) buff[size] = 0;
