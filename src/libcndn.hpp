@@ -362,17 +362,18 @@ public:
 		return crc;
 	}
 
+	template<int _size>
   static String print_v(const char *form, va_list args) {
-    char buff[128];
+    char buff[_size];
     buff[0] = 0;
-    int size = vsprintf(buff, form, args);
+    int size = vsnprintf(buff, _size, form, args);
     if (size>=0) buff[size] = 0;
     return buff;
   }
 
   static String print_r(const char *form, ...) {
     va_list args; va_start(args, form);
-		return print_v(form, args);
+		return print_v<128>(form, args);
   }
 
 	static void pulsePin(uint8_t _pin, uint32_t onTime=100000, uint32_t offTime=100000) {
