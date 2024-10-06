@@ -331,7 +331,7 @@ public:
 
 class CNUtils {
 public:	
-	static void scanWire(TwoWire& wire, Stream& strm) {
+	static void scanWire(TwoWire& wire, Stream& strm, uint8_t* en=nullptr) {
 		for(uint8_t i=1; i < 127; i++) {
 			wire.beginTransmission(i);
 			if (wire.endTransmission() == 0x00) {
@@ -342,6 +342,9 @@ public:
 #else
 				strm.printf("I2C found: 0x%02X(%d)\n", i, i);
 #endif
+				if (en) en[i] = 1;
+			} else {
+				if (en) en[i] = 0;
 			}
 		}
 	}
