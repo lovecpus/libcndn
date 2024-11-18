@@ -1272,4 +1272,67 @@ private:
 	int _dePin;
 };
 
+#if defined(ARDUINO)
+template<size_t siz>
+class CNSPISlave : public Stream
+{
+private:
+	CNStream	rx, tx;
+	static void isrNSS() { get().nss(); }
+	static void isrSCK() { get().sck(); }
+	int16_t iMOSI, iMISO, iSCK, iNSS;
+	uint8_t	uTX, uRX, uCNT;
+
+	void nss()
+	{
+		uTX = uRX = uCNT = 0;
+		pinMode(iMISO, (digitalRead(iNSS)==LOW) ? OUTPUT : INPUT);
+	}
+
+	void delayNano(uint32_t nano) {
+		for(uint32_t n=0;n<nano;n++) __asm("nop");
+	}
+
+	void sck()
+	{
+		uRX <<= 1;
+		uRX |= (digitalRead(iMOSI)==LOW) ? 0 : 1;
+		digitalWrite(iMOSI,uTX&0x80?HIGH:LOW);
+		uTX <<= 1;
+		if (++uCNT>7) {
+			uCNT = 0;
+			rx.write(uRX);
+			uRX = 0;
+			uTX = tx.available() ? tx.read() : 0;
+		}
+	}
+
+public:
+	static CNSPISlave& get() { static CNSPISlave s_inst; return s_inst; }
+
+	CNSPISlave(): rx(siz), tx(siz) {}
+
+	void begin(int16_t _iMOSI, int16_t _iMISO, int16_t _iSCK, int16_t _iNSS)
+	{
+		iMOSI = _iMOSI;
+		iMISO = _iMISO;
+		iSCK	= _iSCK;
+		iNSS 	= _iNSS;
+
+		pinMode(iMOSI, INPUT);
+		pinMode(iMISO, INPUT);
+		pinMode(iSCK, INPUT);
+		pinMode(iNSS, INPUT);
+
+		attachInterrupt(iSCK, isrSCK, FALLING);
+		attachInterrupt(iNSS, isrNSS, CHANGE);
+	}
+
+	virtual size_t write(uint8_t val) { return tx.write(val); }
+	virtual int available() { return rx.available(); }
+	virtual int read() { return rx.read(); }
+	virtual int peek() { return rx.peek(); }
+};
+#endif
+
 #endif
