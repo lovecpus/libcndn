@@ -393,10 +393,10 @@ class CNStream : public Stream
 {
 private:
 	uint8_t		*mem;
-	size_t 		tx, rx;
+	size_t 		tx, rx, ws;
 	size_t 		memsize;
 public:
-	CNStream(size_t _size): tx(0), rx(0) {
+	CNStream(size_t _size): tx(0), rx(0), ws(0) {
 		mem = (uint8_t*)malloc(memsize=_size);
 	}
 
@@ -407,13 +407,14 @@ public:
 		}
 	}
 
-	virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
+	virtual int available() { return ws; }
 	virtual int availableForWrite() { return memsize-available(); }
 
 	virtual int read() {
 		if (available()>0) {
 			size_t pos = rx;
 			rx = (rx+1) % memsize;
+			ws --;
 			return mem[pos];
 		}
 		return -1;
@@ -427,14 +428,15 @@ public:
 	}
 
 	virtual size_t write(uint8_t dat) {
-		if (! availableForWrite()) return 0;
+		if (availableForWrite() == 0) return 0;
 		mem[tx] = dat;
 		tx = (tx+1) % memsize;
+		ws ++;
 		return 1;
 	}
 
 	virtual void flush() {
-		tx = rx = 0;
+		tx = rx = ws = 0;
 	}
 };
 
