@@ -408,28 +408,34 @@ public:
 	}
 
 	virtual int available() { return (rx>tx)?(memsize+tx-rx):(tx-rx); }
+	virtual int availableForWrite() { return memsize-available(); }
+
 	virtual int read() {
 		if (available()>0) {
 			size_t pos = rx;
-			rx=(rx+1)%memsize;
+			rx = (rx+1) % memsize;
 			return mem[pos];
 		}
 		return -1;
 	}
+
 	virtual int peek() {
 		if (available()>0) {
 			return mem[rx];
 		}
 		return -1;
 	}
+
 	virtual size_t write(uint8_t dat) {
-		mem[tx++]=dat;
-		tx=tx%memsize;
-		if (tx==rx) rx=(rx+1)%memsize;
+		if (! availableForWrite()) return 0;
+		mem[tx] = dat;
+		tx = (tx+1) % memsize;
 		return 1;
 	}
 
-	virtual void flush() {}
+	virtual void flush() {
+		tx = rx = 0;
+	}
 };
 
 class RTStream : public Stream
